@@ -1,10 +1,9 @@
 name:                aoc2019
 version:             0.1.0.0
-github:              githubuser/aoc2019
+github:              z0isch/aoc2019
 license:             BSD3
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2019 Author name here
+author:              AJ Ruf
+copyright:           2019 AJ Ruf
 
 extra-source-files:
 - README.md
