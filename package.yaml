@@ -10,18 +10,11 @@ extra-source-files:
 - README.md
 - ChangeLog.md
 
-# Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
-
-# To avoid duplicated efforts in documentation and dealing with the
-# complications of embedding Haddock markup inside cabal files, it is
-# common to point users to the README.md file.
 description:         Please see the README on Github at <https://github.com/githubuser/aoc2019#readme>
 
 dependencies:
 - base >= 4.11 && < 10
-- rio >= 0.1.8.0
+- relude
 
 ghc-options:
 - -Wall
@@ -34,6 +27,43 @@ ghc-options:
 
 library:
   source-dirs: src
+  dependencies:
+    - vector
+    - text
+  default-extensions:
+  - NoImplicitPrelude
+  - OverloadedStrings
+  - OverloadedLists
+  - LambdaCase
+  - GADTSyntax
+  - RankNTypes
+  - ScopedTypeVariables
+  - DeriveGeneric
+  - TupleSections
+  - BangPatterns
+  - MultiParamTypeClasses
+  - FlexibleInstances
+  - FlexibleContexts
+  - MultiWayIf
+  - TypeFamilies
+  - TypeOperators
+  - FunctionalDependencies
+  - DisambiguateRecordFields
+  - MonadComprehensions
+  - BinaryLiterals
+  - RecursiveDo
+  - ParallelListComp
+  - PartialTypeSignatures
+  - RecordWildCards
+  - PatternSynonyms
+  - EmptyCase
+  - InstanceSigs
+  - KindSignatures
+  - DeriveFunctor
+  - DeriveFoldable
+  - DeriveTraversable
+  - ConstraintKinds
+  - ExplicitNamespaces
 
 executables:
   aoc2019-exe:
