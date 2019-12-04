@@ -1,38 +1,23 @@
-name:                aoc2019
-version:             0.1.0.0
-github:              z0isch/aoc2019
-license:             BSD3
-author:              AJ Ruf
-copyright:           2019 AJ Ruf
+name: aoc2019
+version: 0.1.0.0
+github: z0isch/aoc2019
+license: BSD3
+author: AJ Ruf
+copyright: 2019 AJ Ruf
 
 extra-source-files:
-- README.md
-- ChangeLog.md
+  - README.md
+  - ChangeLog.md
 
-description:         Please see the README on Github at <https://github.com/githubuser/aoc2019#readme>
+description: Please see the README on Github at <https://github.com/githubuser/aoc2019#readme>
 
 dependencies:
-- base >= 4.11 && < 10
-- relude
+  - base >= 4.11 && < 10
+  - relude
 
-ghc-options:
-- -Wall
-- -Wcompat
-- -Widentities
-- -Wincomplete-record-updates
-- -Wincomplete-uni-patterns
-- -Wpartial-fields
-- -Wredundant-constraints
-
-library:
-  source-dirs: src
-  dependencies:
-    - vector
-    - text
-  default-extensions:
+default-extensions:
   - NoImplicitPrelude
   - OverloadedStrings
-  - OverloadedLists
   - LambdaCase
   - GADTSyntax
   - RankNTypes
@@ -63,29 +48,49 @@ library:
   - DeriveTraversable
   - ConstraintKinds
   - ExplicitNamespaces
+  - NamedFieldPuns
+
+ghc-options:
+  - -Wall
+  - -Wcompat
+  - -Widentities
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wpartial-fields
+  - -Wredundant-constraints
+
+library:
+  source-dirs: src
+  dependencies:
+    - vector
+    - text
+    - megaparsec
+    - containers
+    - intervals
+    - linear
 
 executables:
   aoc2019-exe:
-    main:                Main.hs
-    source-dirs:         app
+    main: Main.hs
+    source-dirs: app
     dependencies:
-    - aoc2019
-    - optparse-simple
+      - aoc2019
+      - optparse-simple
 
     ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
 
 tests:
   aoc2019-test:
-    main:                Spec.hs
-    source-dirs:         test
+    main: Spec.hs
+    source-dirs: test
     dependencies:
-    - aoc2019
-    - hspec
+      - aoc2019
+      - hspec
 
     ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N

@@ -1,8 +1,11 @@
-module Main (main) where
+module Main
+  ( main
+  )
+where
 
 import           Relude
 
-import           Day1   (part1)
+import           Day3                           ( part1 )
 
 main :: IO ()
 main = part1 >>= print
