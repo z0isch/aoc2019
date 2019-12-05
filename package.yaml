@@ -68,6 +68,7 @@ library:
     - containers
     - intervals
     - linear
+    - monad-loops
 
 executables:
   aoc2019-exe:

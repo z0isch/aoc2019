@@ -2,63 +2,184 @@ module Day5 where
 
 import Relude hiding (Op)
 
-import Data.Vector (Vector)
-import qualified Data.Vector as V
+import Data.Maybe (fromJust)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer
+import Data.Vector (Vector, (!?), (!), (//))
+import qualified Data.Vector as V
+import Data.Text (pack)
+import Control.Monad.Loops
 
 data ParamMode = Pos | Imm
     deriving (Eq, Show)
 
 data Param = Param
     { mode :: !ParamMode
-    , val :: !Integer
+    , val :: !Int
     }
     deriving (Eq, Show)
 
 data Op
-    = Add !Param !Param !Param
-    | Multiply !Param !Param !Param
-    | Input !Integer
-    | Output !Integer
+    = Add !Param !Param !Int
+    | Multiply !Param !Param !Int
+    | Input !Int
+    | Output !Int
+    | Halt
+    | JIT !Param !Param
+    | JIF !Param !Param
+    | LTC !Param !Param !Int
+    | EQC !Param !Param !Int
     deriving (Eq, Show)
 
 type Parser = Parsec Void Text
 
 opP :: Parser Op
-opP = try (binOpP Add 1) <|> try (binOpP Multiply 2) <|> inputP <|> outputP
-
-commaOrEOF :: Parser ()
-commaOrEOF = void (char ',') <|> eof
-
-paramP :: Parser Integer
-paramP = signed (pure ()) decimal <* commaOrEOF
-
-inputP :: Parser Op
-inputP = Input <$> (char '3' *> char ',' *> paramP)
-
-outputP :: Parser Op
-outputP = Output <$> (char '4' *> char ',' *> paramP)
-
-binOpP :: (Param -> Param -> Param -> Op) -> Integer -> Parser Op
-binOpP op code = reverse <$> opCodeP >>= \case
-  (a1 : a2 : pms) -> do
-    (pm1 : pm2 : mpm3) <- forM pms $ \case
-      '0' -> pure Pos
-      '1' -> pure Imm
-      p -> fail $ "ParamMode cannot be: " <> show p
-    let pm3 = fromMaybe Pos $ fmap head $ nonEmpty mpm3
-    case readMaybe [a2, a1] of
-      Just c | c == code -> do
-        (v1 : v2 : v3 : []) <- count 3 paramP
-        pure $ op (Param pm1 v1) (Param pm2 v2) (Param pm3 v3)
-      _ -> fail $ "Unknown OpCode: " <> [a2, a1]
-  a -> fail $ "OpCode for binary op must be 4 or 5 digits not: " <> show
-    (reverse a)
+opP = do
+  o <- paramP
+  (c, pm1, pm2, _) <- getOpCode o
+  case c of
+    1 -> do
+      (v1 : v2 : v3 : []) <- count 3 paramP
+      pure $ Add (Param pm1 v1) (Param pm2 v2) v3
+    2 -> do
+      (v1 : v2 : v3 : []) <- count 3 paramP
+      pure $ Multiply (Param pm1 v1) (Param pm2 v2) v3
+    3 -> Input <$> paramP
+    4 -> Output <$> paramP
+    5 -> do
+      (v1 : v2 : []) <- count 2 paramP
+      pure $ JIT (Param pm1 v1) (Param pm2 v2)
+    6 -> do
+      (v1 : v2 : []) <- count 2 paramP
+      pure $ JIF (Param pm1 v1) (Param pm2 v2)
+    7 -> do
+      (v1 : v2 : v3 : []) <- count 3 paramP
+      pure $ LTC (Param pm1 v1) (Param pm2 v2) v3
+    8 -> do
+      (v1 : v2 : v3 : []) <- count 3 paramP
+      pure $ EQC (Param pm1 v1) (Param pm2 v2) v3
+    99 -> pure Halt
+    _ -> fail $ "Unkown opcode: " <> show o
  where
-  opCodeP :: Parser [Char]
-  opCodeP = digitChar `manyTill` char ','
+  paramP :: Parser Int
+  paramP = signed (pure ()) decimal <* (void (char ',') <|> eof)
 
-test :: Text
-test = "1002,4,3,4"
+  getOpCode x =
+    (,,,)
+      <$> pure (x `mod` 100)
+      <*> mkParamMode ((x `div` 100) `mod` 10)
+      <*> mkParamMode ((x `div` 1000) `mod` 10)
+      <*> mkParamMode ((x `div` 10000) `mod` 10)
+  mkParamMode 0 = pure Pos
+  mkParamMode 1 = pure Imm
+  mkParamMode p = fail $ "ParamMode cannot be: " <> show p
+
+data Prog = Prog
+  { halted :: Bool
+  , input :: !Int
+  , outputs :: ![Int]
+  , instructionPointer :: !Int
+  , instructions :: !(Vector Int)
+  }
+  deriving (Eq, Show)
+
+data ProgError = ParserError (ParseErrorBundle Text Void) | BadPointer Int | HaltedProg
+  deriving (Eq, Show)
+
+getVal :: Vector Int -> Param -> Either ProgError Int
+getVal vs Param {..} = case mode of
+  Imm -> Right val
+  Pos -> maybe (Left (BadPointer val)) Right $ vs !? val
+
+step :: Prog -> (Either ProgError Prog)
+step p@(Prog {..}) = case instructions !? instructionPointer of
+  Nothing -> Left $ BadPointer instructionPointer
+  Just _ ->
+    case
+        runParser
+          opP
+          ""
+          (pack $ concat $ intersperse "," $ toList $ fmap show $ V.drop
+            instructionPointer
+            instructions
+          )
+      of
+        Left e -> Left $ ParserError e
+        Right op -> case op of
+          Halt -> Right $ p { halted = True }
+          Input pos -> Right $ p
+            { instructions = instructions // [(pos, input)]
+            , instructionPointer = instructionPointer + 2
+            }
+          Output pos -> Right $ p
+            { outputs = instructions ! pos : outputs
+            , instructionPointer = instructionPointer + 2
+            }
+          Add p1 p2 o -> do
+            v <- (+) <$> getVal instructions p1 <*> getVal instructions p2
+            pure $ p
+              { instructions = instructions // [(o, v)]
+              , instructionPointer = instructionPointer + 4
+              }
+          Multiply p1 p2 o -> do
+            v <- (*) <$> getVal instructions p1 <*> getVal instructions p2
+            pure $ p
+              { instructions = instructions // [(o, v)]
+              , instructionPointer = instructionPointer + 4
+              }
+          JIT p1 p2 -> do
+            (v1, v2) <-
+              (,) <$> getVal instructions p1 <*> getVal instructions p2
+            pure $ p
+              { instructionPointer = if v1 /= 0
+                then v2
+                else instructionPointer + 3
+              }
+          JIF p1 p2 -> do
+            (v1, v2) <-
+              (,) <$> getVal instructions p1 <*> getVal instructions p2
+            pure $ p
+              { instructionPointer = if v1 == 0
+                then v2
+                else instructionPointer + 3
+              }
+          LTC p1 p2 o -> do
+            (v1, v2) <-
+              (,) <$> getVal instructions p1 <*> getVal instructions p2
+            pure $ p
+              { instructions = instructions // [(o, if v1 < v2 then 1 else 0)]
+              , instructionPointer = instructionPointer + 4
+              }
+          EQC p1 p2 o -> do
+            (v1, v2) <-
+              (,) <$> getVal instructions p1 <*> getVal instructions p2
+            pure $ p
+              { instructions = instructions // [(o, if v1 == v2 then 1 else 0)]
+              , instructionPointer = instructionPointer + 4
+              }
+
+
+runProg :: Prog -> (Either ProgError Prog)
+runProg = iterateUntilM halted step
+
+dayInput :: IO (Vector Int)
+dayInput = V.fromList . map (fromJust . readMaybe) . sepBy' ',' <$> readFile
+  "data/day5.txt"
+
+sepBy' :: Char -> String -> [String]
+sepBy' _ [] = []
+sepBy' c s = cons $ case break (== c) s of
+  (l, s') ->
+    ( l
+    , case s' of
+      [] -> []
+      _ : s'' -> sepBy' c s''
+    )
+  where cons ~(h, t) = h : t
+
+part1 :: IO (Either ProgError Prog)
+part1 = runProg . Prog False 1 [] 0 <$> dayInput
+
+part2 :: IO (Either ProgError Prog)
+part2 = runProg . Prog False 5 [] 0 <$> dayInput
