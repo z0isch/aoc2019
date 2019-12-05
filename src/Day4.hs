@@ -1,6 +1,6 @@
 module Day4 where
 
-import           Relude
+import Relude
 
 type Pass = [Int]
 
