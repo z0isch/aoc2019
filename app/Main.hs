@@ -3,9 +3,9 @@ module Main
   )
 where
 
-import           Relude
+import Relude
 
-import           Day3                           ( part1 )
+import Day6 (part1)
 
 main :: IO ()
 main = part1 >>= print

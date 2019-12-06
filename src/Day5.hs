@@ -62,9 +62,7 @@ opP = do
     99 -> pure Halt
     _ -> fail $ "Unkown opcode: " <> show o
  where
-  paramP :: Parser Int
   paramP = signed (pure ()) decimal <* (void (char ',') <|> eof)
-
   getOpCode x =
     (,,,)
       <$> pure (x `mod` 100)
@@ -84,7 +82,7 @@ data Prog = Prog
   }
   deriving (Eq, Show)
 
-data ProgError = ParserError (ParseErrorBundle Text Void) | BadPointer Int | HaltedProg
+data ProgError = ParserError (ParseErrorBundle Text Void) | BadPointer Int
   deriving (Eq, Show)
 
 getVal :: Vector Int -> Param -> Either ProgError Int
