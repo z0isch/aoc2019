@@ -9,16 +9,17 @@ import qualified Data.Map.Strict as M
 import Data.Text (splitOn)
 import Data.List (minimum)
 
+processInput :: Text -> [(Text, Text)]
+processInput = fmap ((\[a, b] -> (a, b)) . splitOn ")") . lines
+
+test :: Map Text (Set Text)
 test =
   mkOrbitMap
-    $ fmap ((\[a, b] -> (a, b)) . splitOn ")")
-    $ lines
+    $ processInput
     $ "COM)B\nB)C\nC)D\nD)E\nE)F\nB)G\nG)H\nD)I\nE)J\nJ)K\nK)L\nK)YOU\nI)SAN"
 
-
 input :: IO [(Text, Text)]
-input = fmap ((\[a, b] -> (a, b)) . splitOn ")") . lines <$> readFileText
-  "data/day6.txt"
+input = processInput <$> readFileText "data/day6.txt"
 
 mkOrbitMap :: [(Text, Text)] -> Map Text (Set Text)
 mkOrbitMap = foldr
@@ -27,15 +28,11 @@ mkOrbitMap = foldr
 
 countOrbits :: Map Text (Set Text) -> Text -> Sum Int
 countOrbits orbits orbitee =
-  maybe
-      mempty
+  foldMap
       (\orbiters ->
         Sum (S.size orbiters) <> foldMap (countOrbits orbits) orbiters
       )
     $ M.lookup orbitee orbits
-
-getParent :: Text -> Map Text (Set Text) -> Maybe Text
-getParent me = fmap head . nonEmpty . M.keys . M.filter (me `S.member`)
 
 isDownStream :: Map Text (Set Text) -> Text -> Text -> Any
 isDownStream orbits me you =
@@ -50,12 +47,12 @@ isDownStream orbits me you =
 steps :: Map Text (Set Text) -> Text -> Text -> Maybe Int
 steps orbits parent me = go 0 parent
  where
-  go steps parent' =
+  go stepsSoFar parent' =
     maybe
         Nothing
         (\children -> if me `S.member` children
-          then Just (steps + 1)
-          else fmap head $ nonEmpty $ mapMaybe (go (steps + 1)) $ S.toList
+          then Just stepsSoFar
+          else fmap head $ nonEmpty $ mapMaybe (go (stepsSoFar + 1)) $ S.toList
             children
         )
       $ M.lookup parent' orbits
@@ -79,7 +76,4 @@ part1 = do
   pure $ foldMap (countOrbits orbits) $ M.keys orbits
 
 part2 :: IO Int
-part2 =
-  (\s -> s - 2) . minimum . (stepsBetween "YOU" "SAN") . mkOrbitMap <$> input
-
-
+part2 = minimum . (stepsBetween "YOU" "SAN") . mkOrbitMap <$> input
