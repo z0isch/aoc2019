@@ -179,7 +179,7 @@ step p@(Prog {..}) = case status of
 
 
 runProg :: Prog -> (Either ProgError Prog)
-runProg = iterateUntilM ((== Halted) . status) step
+runProg p = step p >>= iterateUntilM ((== Halted) . status) step
 
 dayInput :: String -> IO (Vector Int)
 dayInput fn =
