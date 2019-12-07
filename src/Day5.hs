@@ -73,16 +73,19 @@ opP = do
   mkParamMode 1 = pure Imm
   mkParamMode p = fail $ "ParamMode cannot be: " <> show p
 
+data ProgStatus = Ready | AwaitingInput | Halted
+  deriving (Eq, Show)
+
 data Prog = Prog
-  { halted :: Bool
-  , input :: !Int
-  , outputs :: ![Int]
+  { status :: ProgStatus
+  , input :: ![Int]
+  , output :: ![Int]
   , instructionPointer :: !Int
   , instructions :: !(Vector Int)
   }
   deriving (Eq, Show)
 
-data ProgError = ParserError (ParseErrorBundle Text Void) | BadPointer Int
+data ProgError = ParserError (ParseErrorBundle Text Void) | BadPointer Int | NoMoreInput | InstructionAfterHalted
   deriving (Eq, Show)
 
 getVal :: Vector Int -> Param -> Either ProgError Int
@@ -91,79 +94,96 @@ getVal vs Param {..} = case mode of
   Pos -> maybe (Left (BadPointer val)) Right $ vs !? val
 
 step :: Prog -> (Either ProgError Prog)
-step p@(Prog {..}) = case instructions !? instructionPointer of
-  Nothing -> Left $ BadPointer instructionPointer
-  Just _ ->
-    case
-        runParser
-          opP
-          ""
-          (pack $ concat $ intersperse "," $ toList $ fmap show $ V.drop
-            instructionPointer
-            instructions
-          )
-      of
-        Left e -> Left $ ParserError e
-        Right op -> case op of
-          Halt -> Right $ p { halted = True }
-          Input pos -> Right $ p
-            { instructions = instructions // [(pos, input)]
-            , instructionPointer = instructionPointer + 2
-            }
-          Output pos -> Right $ p
-            { outputs = instructions ! pos : outputs
-            , instructionPointer = instructionPointer + 2
-            }
-          Add p1 p2 o -> do
-            v <- (+) <$> getVal instructions p1 <*> getVal instructions p2
-            pure $ p
-              { instructions = instructions // [(o, v)]
-              , instructionPointer = instructionPointer + 4
+step p@(Prog {..}) = case status of
+  Halted -> Left InstructionAfterHalted
+  _ -> case instructions !? instructionPointer of
+    Nothing -> Left $ BadPointer instructionPointer
+    Just _ ->
+      case
+          runParser
+            opP
+            ""
+            (pack $ concat $ intersperse "," $ toList $ fmap show $ V.drop
+              instructionPointer
+              instructions
+            )
+        of
+          Left e -> Left $ ParserError e
+          Right op -> case op of
+
+            Halt -> Right $ p { status = Halted }
+
+            Input pos -> case head <$> (nonEmpty input) of
+              Nothing
+                | status == AwaitingInput -> Left NoMoreInput
+                | otherwise -> Right $ p { status = AwaitingInput }
+              Just i -> Right $ p
+                { status = Ready
+                , instructions = instructions // [(pos, i)]
+                , instructionPointer = instructionPointer + 2
+                , input = maybe [] tail $ nonEmpty input
+                }
+
+            Output pos -> Right $ p
+              { output = instructions ! pos : output
+              , instructionPointer = instructionPointer + 2
               }
-          Multiply p1 p2 o -> do
-            v <- (*) <$> getVal instructions p1 <*> getVal instructions p2
-            pure $ p
-              { instructions = instructions // [(o, v)]
-              , instructionPointer = instructionPointer + 4
-              }
-          JIT p1 p2 -> do
-            (v1, v2) <-
-              (,) <$> getVal instructions p1 <*> getVal instructions p2
-            pure $ p
-              { instructionPointer = if v1 /= 0
-                then v2
-                else instructionPointer + 3
-              }
-          JIF p1 p2 -> do
-            (v1, v2) <-
-              (,) <$> getVal instructions p1 <*> getVal instructions p2
-            pure $ p
-              { instructionPointer = if v1 == 0
-                then v2
-                else instructionPointer + 3
-              }
-          LTC p1 p2 o -> do
-            (v1, v2) <-
-              (,) <$> getVal instructions p1 <*> getVal instructions p2
-            pure $ p
-              { instructions = instructions // [(o, if v1 < v2 then 1 else 0)]
-              , instructionPointer = instructionPointer + 4
-              }
-          EQC p1 p2 o -> do
-            (v1, v2) <-
-              (,) <$> getVal instructions p1 <*> getVal instructions p2
-            pure $ p
-              { instructions = instructions // [(o, if v1 == v2 then 1 else 0)]
-              , instructionPointer = instructionPointer + 4
-              }
+
+            Add p1 p2 o -> do
+              v <- (+) <$> getVal instructions p1 <*> getVal instructions p2
+              pure $ p
+                { instructions = instructions // [(o, v)]
+                , instructionPointer = instructionPointer + 4
+                }
+            Multiply p1 p2 o -> do
+              v <- (*) <$> getVal instructions p1 <*> getVal instructions p2
+              pure $ p
+                { instructions = instructions // [(o, v)]
+                , instructionPointer = instructionPointer + 4
+                }
+
+            JIT p1 p2 -> do
+              (v1, v2) <-
+                (,) <$> getVal instructions p1 <*> getVal instructions p2
+              pure $ p
+                { instructionPointer = if v1 /= 0
+                  then v2
+                  else instructionPointer + 3
+                }
+
+            JIF p1 p2 -> do
+              (v1, v2) <-
+                (,) <$> getVal instructions p1 <*> getVal instructions p2
+              pure $ p
+                { instructionPointer = if v1 == 0
+                  then v2
+                  else instructionPointer + 3
+                }
+
+            LTC p1 p2 o -> do
+              (v1, v2) <-
+                (,) <$> getVal instructions p1 <*> getVal instructions p2
+              pure $ p
+                { instructions = instructions // [(o, if v1 < v2 then 1 else 0)]
+                , instructionPointer = instructionPointer + 4
+                }
+
+            EQC p1 p2 o -> do
+              (v1, v2) <-
+                (,) <$> getVal instructions p1 <*> getVal instructions p2
+              pure $ p
+                { instructions =
+                  instructions // [(o, if v1 == v2 then 1 else 0)]
+                , instructionPointer = instructionPointer + 4
+                }
 
 
 runProg :: Prog -> (Either ProgError Prog)
-runProg = iterateUntilM halted step
+runProg = iterateUntilM ((== Halted) . status) step
 
-dayInput :: IO (Vector Int)
-dayInput = V.fromList . map (fromJust . readMaybe) . sepBy' ',' <$> readFile
-  "data/day5.txt"
+dayInput :: String -> IO (Vector Int)
+dayInput fn =
+  V.fromList . map (fromJust . readMaybe) . sepBy' ',' <$> readFile fn
 
 sepBy' :: Char -> String -> [String]
 sepBy' _ [] = []
@@ -177,7 +197,7 @@ sepBy' c s = cons $ case break (== c) s of
   where cons ~(h, t) = h : t
 
 part1 :: IO (Either ProgError Prog)
-part1 = runProg . Prog False 1 [] 0 <$> dayInput
+part1 = runProg . Prog Ready [1] [] 0 <$> dayInput "data/day5.txt"
 
 part2 :: IO (Either ProgError Prog)
-part2 = runProg . Prog False 5 [] 0 <$> dayInput
+part2 = runProg . Prog Ready [5] [] 0 <$> dayInput "data/day5.txt"
