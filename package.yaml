@@ -69,6 +69,7 @@ library:
     - intervals
     - linear
     - monad-loops
+    - JuicyPixels
 
 executables:
   aoc2019-exe:
