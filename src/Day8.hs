@@ -6,7 +6,6 @@ import Data.List (minimumBy)
 import Codec.Picture (generateImage, Image(..), PixelRGB8(..), writeBitmap)
 import qualified Data.Vector as V
 import Data.Vector ((!))
-import Control.Arrow
 
 test :: String
 test = "0222112222120000"
@@ -23,7 +22,7 @@ checksum :: [[String]] -> Product Int
 checksum =
   bifoldMap (Product . getSum) (Product . getSum)
     . foldMap (numOf '1' &&& numOf '2')
-    . minimumBy (compare `on` (foldMap (numOf '0')))
+    . minimumBy (comparing (foldMap (numOf '0')))
   where numOf x = Sum . length . (filter (== x))
 
 part1 :: IO (Product Int)

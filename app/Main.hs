@@ -5,7 +5,7 @@ where
 
 import Relude
 
-import Day6 (part1)
+import Day9 (part2)
 
 main :: IO ()
-main = part1 >>= print
+main = part2 >>= print
