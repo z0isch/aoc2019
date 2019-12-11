@@ -89,7 +89,7 @@ data Prog = Prog
   }
   deriving (Eq, Show)
 
-data ProgError = ParserError (ParseErrorBundle Text Void) | OutputToImm | BadPointer Integer | NoMoreInput | InstructionAfterHalted
+data ProgError = ParserError (ParseErrorBundle Text Void) | OutputToImm | BadPointer Integer | NoMoreInput | InstructionAfterHalted | NotEnoughOutput | BadOutput
   deriving (Eq, Show)
 
 getIOPos :: Prog -> Param -> Either ProgError Integer
