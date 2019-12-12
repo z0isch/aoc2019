@@ -73,6 +73,7 @@ library:
     - linear
     - monad-loops
     - JuicyPixels
+    - lens
 
 executables:
   aoc2019-exe:
