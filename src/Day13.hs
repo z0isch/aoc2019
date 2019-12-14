@@ -9,7 +9,6 @@ import qualified Data.Map.Strict as M
 import Control.Monad.Loops (iterateUntilM)
 import Codec.Picture (generateImage, Image(..), PixelRGB8(..), writeBitmap)
 import Data.List (maximum)
-import qualified Data.Sequence as Seq
 
 data Tile = Wall | Block | HPaddle | Ball
     deriving (Eq, Show)
@@ -26,6 +25,7 @@ moveInput Neutral = 0
 moveInput TL = (-1)
 moveInput TR = 1
 
+parseTile :: Integer -> Maybe Tile
 parseTile 1 = Just Wall
 parseTile 2 = Just Block
 parseTile 3 = Just HPaddle
@@ -40,13 +40,12 @@ parseOutput = go (0, mempty) . reverse
   go (s, m) (x : y : t : xs) = go (s, M.insert (V2 x y) (parseTile t) m) xs
   go _ _ = Nothing
 
-numBlocks :: Prog -> Maybe Int
-numBlocks =
-  fmap (M.size . M.filter (== Just Block) . snd) . parseOutput . output
-
 part1 :: IO (Either ProgError (Maybe Int))
 part1 = fmap numBlocks . runProg . Prog Ready [] [] 0 0 <$> dayInput
   "./data/day13.txt"
+ where
+  numBlocks =
+    fmap (M.size . M.filter (== Just Block) . snd) . parseOutput . output
 
 insertQuarter :: Prog -> Prog
 insertQuarter p@Prog {..} = p { instructions = M.insert 0 2 instructions }
@@ -71,18 +70,6 @@ chooseMoves GameState { prog = Prog {..}, board } = filter
 
 inputMove :: Prog -> Move -> Prog
 inputMove p@Prog {..} m = p { input = moveInput m : input }
-
-part2 = do
-  eg <- gameStep . insertQuarter . Prog Ready [] [] 0 0 <$> dayInput
-    "./data/day13.txt"
-  case eg of
-    Left e -> error $ show e
-    Right g -> do
-      let
-        (s, b) = Unsafe.fromJust $ parseOutput $ output g
-        gs = GameState b s (g { output = [] })
-      gs' <- gameLoop 0 [(gs, chooseMoves gs)]
-      pure $ score gs'
 
 mkImage :: GameState -> Image PixelRGB8
 mkImage GameState { prog = Prog {..}, board } = generateImage
@@ -121,7 +108,9 @@ updateGameState g@GameState {..} p@Prog {..} =
 
 gameLoop :: Integer -> [(GameState, [Move])] -> IO GameState
 gameLoop _ [] = error "Out of options"
-gameLoop n ((_, []) : oldStates) = gameLoop (n - 1) oldStates
+gameLoop n ((gs, []) : oldStates) = do
+  writeBitmap ("./output/day13/backtrack-" <> show n <> ".bmp") $ mkImage gs
+  gameLoop (n - 1) oldStates
 gameLoop n ((gs@(GameState { prog }), (m : ms)) : oldStates) =
   case gameStep (inputMove prog m) of
     Left e -> error $ show e
@@ -130,20 +119,27 @@ gameLoop n ((gs@(GameState { prog }), (m : ms)) : oldStates) =
         currentStates = ((gs, ms) : oldStates)
         gs' = updateGameState gs prog'
         numBlocks = M.size $ M.filter (== Just Block) $ board gs'
-      in if numBlocks == 0
-        then do
-          writeBitmap ("./output/day13/" <> show n <> ".bmp") $ mkImage gs'
-          pure gs'
-        else case status prog' of
-          Halted -> case ms of
-            [] -> do
-              writeBitmap ("./output/day13/backtrack-" <> show n <> ".bmp")
-                $ mkImage gs'
-              gameLoop (n - 1) oldStates
-            _ -> gameLoop n currentStates
+      in if numBlocks > 0
+        then case status prog' of
+          Halted -> gameLoop n currentStates
           _ -> do
-            when ((n `mod` 5 == 0) || n == 396)
+            when (n `mod` 5 == 0)
               $ writeBitmap ("./output/day13/" <> show n <> ".bmp")
               $ mkImage gs'
             gameLoop (n + 1) ((gs', chooseMoves gs') : currentStates)
+        else do
+          writeBitmap ("./output/day13/" <> show n <> ".bmp") $ mkImage gs'
+          pure gs'
 
+part2 :: IO Integer
+part2 = do
+  eg <- gameStep . insertQuarter . Prog Ready [] [] 0 0 <$> dayInput
+    "./data/day13.txt"
+  case eg of
+    Left e -> error $ show e
+    Right g -> do
+      let
+        (s, b) = Unsafe.fromJust $ parseOutput $ output g
+        gs = GameState b s (g { output = [] })
+      gs' <- gameLoop 0 [(gs, chooseMoves gs)]
+      pure $ score gs'
