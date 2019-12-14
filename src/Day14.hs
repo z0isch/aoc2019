@@ -45,25 +45,35 @@ inputP =
 input :: IO (Maybe Reactions)
 input = parseMaybe inputP <$> readFileText "data/day14.txt"
 
-neededOre :: Reactions -> Sum Integer
-neededOre reactions = (M.! "ORE") $ fst $ go mempty (mempty, [(1, "FUEL")])
+data Factory = Factory
+    { reactions :: !Reactions
+    , extras :: !(Map Chemical (Sum Integer))
+    , reqs :: !(Map Chemical (Sum Integer))
+    , produced :: ![(Integer, Chemical)]
+    }
+    deriving (Eq, Show)
+
+neededOre :: Integer -> Reactions -> Factory
+neededOre numFuel rs = go $ Factory rs mempty mempty [(numFuel, "FUEL")]
  where
-  go _ (reqs, []) = (reqs, [])
-  go extras (reqs, ((numOre, "ORE") : cs)) =
-    go extras (M.insertWith (<>) "ORE" (Sum numOre) reqs, cs)
-  go extras (reqs, ((numC, c) : cs)) =
-    let
-      (extras', chemicalsToProduce) =
-        runReverseReaction reactions extras (numC, c)
-    in
-      go extras' (M.insertWith (<>) c (Sum numC) reqs, cs ++ chemicalsToProduce)
+  go f@Factory {..} = case produced of
+    [] -> f
+    ((numOre, "ORE") : cs) ->
+      go f { produced = cs, reqs = M.insertWith (<>) "ORE" (Sum numOre) reqs }
+    ((numC, c) : cs) ->
+      let (extras', chemicalsToProduce) = runReverseReaction f (numC, c)
+      in
+        go $ f
+          { extras = extras'
+          , reqs = M.insertWith (<>) c (Sum numC) reqs
+          , produced = cs ++ chemicalsToProduce
+          }
 
 runReverseReaction
-  :: Reactions
-  -> Map Chemical (Sum Integer)
+  :: Factory
   -> (Integer, Chemical)
   -> (Map Chemical (Sum Integer), [(Integer, Chemical)])
-runReverseReaction reactions extras (numNeededC, neededChemical) =
+runReverseReaction Factory {..} (numNeededC, neededChemical) =
   let
     extrasOfNeededChemical = fromMaybe 0 $ M.lookup neededChemical extras
     numNeededAfterExtras = numNeededC - getSum extrasOfNeededChemical
@@ -83,4 +93,15 @@ runReverseReaction reactions extras (numNeededC, neededChemical) =
       )
 
 part1 :: IO (Maybe (Sum Integer))
-part1 = fmap neededOre <$> input
+part1 = fmap ((M.! "ORE") . reqs . neededOre 1) <$> input
+
+--Binary search me
+foo n =
+  (M.! "FUEL")
+    . reqs
+    . Unsafe.head
+    . dropWhile ((< n) . (M.! "ORE") . reqs)
+    . zipWith neededOre [1639000 ..]
+    . repeat
+
+part2 = fmap (foo 1000000000000) <$> input
