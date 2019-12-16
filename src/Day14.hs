@@ -95,13 +95,23 @@ runReverseReaction Factory {..} (numNeededC, neededChemical) =
 part1 :: IO (Maybe (Sum Integer))
 part1 = fmap ((M.! "ORE") . reqs . neededOre 1) <$> input
 
---Binary search me
-foo n =
-  (M.! "FUEL")
-    . reqs
-    . Unsafe.head
-    . dropWhile ((< n) . (M.! "ORE") . reqs)
-    . zipWith neededOre [1639000 ..]
-    . repeat
+part2 :: IO (Maybe (Sum Integer))
+part2 = fmap (binarySearchForFuel 1000000000000) <$> input
 
-part2 = fmap (foo 1000000000000) <$> input
+binarySearchForFuel :: Integer -> Reactions -> Sum Integer
+binarySearchForFuel ore requirements = go 0 ore
+ where
+  go low high =
+    let
+      mid = let a = (high - low) `div` 2 in low + a
+      oreNeeded = reqs $ neededOre mid requirements
+      fuelProduced = oreNeeded M.! "FUEL"
+    in case compare (getSum $ oreNeeded M.! "ORE") ore of
+      EQ -> fuelProduced
+      LT ->
+        let oreNeeded' = reqs $ neededOre (mid + 1) requirements
+        in
+          if getSum (oreNeeded' M.! "ORE") >= ore
+            then fuelProduced
+            else go mid high
+      GT -> go low mid
